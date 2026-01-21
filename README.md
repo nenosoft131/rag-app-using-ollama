@@ -8,9 +8,9 @@ A modern RAG (Retrieval-Augmented Generation) application with separated fronten
 
 - **FastAPI**: RESTful API server
 - **LangGraph**: Workflow orchestration for RAG pipeline
-- **ChromaDB**: Vector storage for document embeddings
+- **FAISS**: Vector storage for document embeddings
 - **Ollama**: LLM integration for response generation
-- **Sentence Transformers**: Text embeddings
+- **Ollama (nomic-embed-text)**: Text embeddings
 
 ### Frontend (Streamlit)
 
@@ -137,9 +137,9 @@ Frontend:
 
 ### Default Settings
 
-- Embedding model: `all-MiniLM-L6-v2`
+- Embedding model: `nomic-embed-text`
 - Chunk size: 1000 characters with 200 character overlap
-- Search results: 3 most relevant chunks
+- Search results: 4 most relevant chunks
 - Default LLM: `llama2`
 
 ## Project Structure
@@ -166,7 +166,7 @@ Frontend:
 
 - **Ollama Connection**: Ensure Ollama is running on `localhost:11434`
 - **Model Not Found**: The app will automatically pull models if available
-- **Vector Storage**: ChromaDB runs in-memory by default
+- **Vector Storage**: FAISS runs in-memory by default
 
 ### Frontend Issues
 
