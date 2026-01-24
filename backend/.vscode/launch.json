@@ -1,0 +1,19 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "FastAPI (Uvicorn Debug)",
+            "type": "python",
+            "request": "launch",
+            "module": "uvicorn",
+            "args": [
+                "backend.main:app",     // Your FastAPI app
+                "--reload",     // Auto-reload on code changes
+                "--host", "127.0.0.1",
+                "--port", "8000"
+            ],
+            "jinja": true,
+            "console": "integratedTerminal"
+        }
+    ]
+}

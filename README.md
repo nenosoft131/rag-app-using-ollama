@@ -1,4 +1,4 @@
-#RAG app using Ollama
+# RAG app using Ollama
 
 A modern RAG (Retrieval-Augmented Generation) application with separated frontend and backend architecture using LangGraph, FastAPI, and Streamlit.
 

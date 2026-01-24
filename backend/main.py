@@ -30,7 +30,7 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     response: str
     session_id: str
-    sources: List[str] = []
+    # sources: List[str] = []
 
 class DocumentResponse(BaseModel):
     message: str
@@ -42,7 +42,7 @@ rag_workflow = RAGWorkflow(vector_service=vector_service)
 
 @app.get("/")
 async def root():
-    return {"message": "PDF RAG API is running"}
+    return {"message": "RAG API is running"}
 
 @app.post("/upload", response_model=DocumentResponse)
 async def upload_document(file: UploadFile = File(...)):
@@ -60,7 +60,7 @@ async def upload_document(file: UploadFile = File(...)):
         
         return DocumentResponse(
             message=f"Successfully processed {file.filename}",
-            document_count=vector_service.get_collection_size()
+            document_count=vector_service.get_vector_size()
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing document: {str(e)}")
@@ -78,7 +78,7 @@ async def chat(request: ChatRequest):
         return ChatResponse(
             response=response["response"],
             session_id=response["session_id"],
-            sources=response.get("sources", [])
+            # sources=response.get("sources", [])
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing chat: {str(e)}")
@@ -87,14 +87,14 @@ async def chat(request: ChatRequest):
 async def get_documents():
     """Get information about stored documents."""
     return {
-        "document_count": vector_service.get_collection_size(),
+        "document_count": vector_service.get_vector_size(),
         "available_models": ["llama2", "mistral", "codellama"]
     }
 
 @app.delete("/documents")
 async def clear_documents():
     """Clear all stored documents."""
-    vector_service.clear_collection()
+    vector_service.clear_vector_store()
     return {"message": "All documents cleared successfully"}
 
 if __name__ == "__main__":
