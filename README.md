@@ -17,7 +17,7 @@ A modern RAG (Retrieval-Augmented Generation) application with separated fronten
 - **Streamlit**: Web interface for document upload and chat
 - **API Client**: HTTP client for backend communication
 
-![My Image](/Users/muhammad/Desktop/Screenshot.png)
+![My Image](images/Screenshot.png)
 
 ## Features
 
