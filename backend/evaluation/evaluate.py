@@ -8,8 +8,6 @@ from ragas.metrics import (
 
 
 def run_evaluation():
-    dataset = get_eval_dataset()
-    engine = ChatEngine()
 
     results = []
 
