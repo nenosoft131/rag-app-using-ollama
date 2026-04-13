@@ -109,7 +109,7 @@ class RAGWorkflow:
 
         # Run the workflow
         try:
-            final_state = await self.workflow.ainvoke()
+            final_state = await self.workflow.ainvoke(state)
 
             return {
                 "response": final_state.response,

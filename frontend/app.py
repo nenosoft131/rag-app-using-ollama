@@ -1,15 +1,13 @@
 import streamlit as st
 import os
+import uuid
 
 from api_client import RAGAPIClient
 
 # --------------------------------------------------
 # Page config
 # --------------------------------------------------
-st.set_page_config(
-    page_title="PDF RAG Chat",
-    layout="wide"
-)
+st.set_page_config(page_title="PDF RAG Chat", layout="wide")
 
 st.title("📄 PDF RAG Chat with LangGraph Backend")
 
@@ -18,6 +16,28 @@ st.title("📄 PDF RAG Chat with LangGraph Backend")
 # --------------------------------------------------
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
 
+
+# --------------------------------------------------
+# Helper functions
+# --------------------------------------------------
+
+
+def generate_thread_id():
+    thread_id = str(uuid.uuid4())
+    return thread_id
+
+
+def new_chat():
+    st.session_state.session_id = generate_thread_id()
+    add_thread(st.session_state.session_id)
+    st.session_state.messages = []
+
+
+def add_thread(thread_id):
+    if thread_id not in st.session_state["chat_threads"]:
+        st.session_state["chat_threads"].append(thread_id)
+
+
 # --------------------------------------------------
 # Session state initialization
 # --------------------------------------------------
@@ -25,10 +45,15 @@ if "api_client" not in st.session_state:
     st.session_state.api_client = RAGAPIClient(API_BASE_URL)
 
 if "session_id" not in st.session_state:
-    st.session_state.session_id = None
+    st.session_state.session_id = generate_thread_id()
 
 if "messages" not in st.session_state:
     st.session_state.messages = []
+
+if "chat_threads" not in st.session_state:
+    st.session_state["chat_threads"] = []
+
+add_thread(st.session_state.session_id)
 
 # --------------------------------------------------
 # Sidebar
@@ -37,9 +62,7 @@ with st.sidebar:
     st.header("Configuration")
 
     model = st.selectbox(
-        "Select Ollama Model",
-        ["llama2", "mistral", "codellama"],
-        index=0
+        "Select Ollama Model", ["llama2", "mistral", "codellama"], index=0
     )
 
     try:
@@ -57,7 +80,11 @@ with st.sidebar:
             st.success("All documents cleared")
         except Exception as e:
             st.error(f"Error clearing documents: {str(e)}")
-
+    if st.button("New Chat"):
+        new_chat()
+    st.header("History")
+    for thread_id in st.session_state["chat_threads"]:
+        st.button(str(thread_id))
 # --------------------------------------------------
 # Upload PDF
 # --------------------------------------------------
@@ -66,7 +93,7 @@ st.header("Upload PDF")
 uploaded_file = st.file_uploader(
     "Choose a PDF file",
     type="pdf",
-    help="Upload a PDF document to use as context for the chat"
+    help="Upload a PDF document to use as context for the chat",
 )
 
 if uploaded_file is not None:
@@ -99,7 +126,7 @@ for msg_idx, message in enumerate(st.session_state.messages):
                         "",
                         source,
                         height=100,
-                        key=f"history_source_{msg_idx}_{src_idx}"
+                        key=f"history_source_{msg_idx}_{src_idx}",
                     )
                     st.divider()
 
@@ -108,9 +135,7 @@ for msg_idx, message in enumerate(st.session_state.messages):
 # --------------------------------------------------
 if prompt := st.chat_input("Ask a question about your document"):
     # Add user message
-    st.session_state.messages.append(
-        {"role": "user", "content": prompt}
-    )
+    st.session_state.messages.append({"role": "user", "content": prompt})
 
     with st.chat_message("user"):
         st.markdown(prompt)
@@ -120,9 +145,7 @@ if prompt := st.chat_input("Ask a question about your document"):
         with st.spinner("Thinking..."):
             try:
                 response = st.session_state.api_client.chat(
-                    message=prompt,
-                    session_id=st.session_state.session_id,
-                    model=model
+                    message=prompt, session_id=st.session_state.session_id, model=model
                 )
 
                 st.session_state.session_id = response["session_id"]
@@ -133,11 +156,9 @@ if prompt := st.chat_input("Ask a question about your document"):
                 st.markdown(assistant_text)
 
                 # Save assistant message
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": assistant_text,
-                    "sources": sources
-                })
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": assistant_text, "sources": sources}
+                )
 
                 # Display sources immediately (different key namespace)
                 if sources:
@@ -148,7 +169,7 @@ if prompt := st.chat_input("Ask a question about your document"):
                                 "",
                                 source,
                                 height=100,
-                                key=f"live_source_{len(st.session_state.messages)}_{src_idx}"
+                                key=f"live_source_{len(st.session_state.messages)}_{src_idx}",
                             )
                             st.divider()
 
@@ -156,9 +177,6 @@ if prompt := st.chat_input("Ask a question about your document"):
                 error_message = f"Error: {str(e)}"
                 st.error(error_message)
 
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": error_message,
-                    "sources": []
-                })
-
+                st.session_state.messages.append(
+                    {"role": "assistant", "content": error_message, "sources": []}
+                )
