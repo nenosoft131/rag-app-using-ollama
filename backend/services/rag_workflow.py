@@ -3,22 +3,23 @@ from langgraph.graph import StateGraph, END
 from langchain_core.messages import HumanMessage, AIMessage
 from langchain_core.runnables import RunnablePassthrough
 import uuid
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+import asyncio
 from services.ollama_service import OllamaService
 from services.vector_service import VectorService
 from langgraph.checkpoint.memory import InMemorySaver
 
 
-from typing import TypedDict, List
+from typing import TypedDict, List, Any, Optional
 
 
-class RAGState(TypedDict):
-    messages: List
+class RAGState(TypedDict, total=False):
+    messages: List[Any]
     query: str
     context: List[str]
     response: str
     session_id: str
-    sources: List[str]
+    sources: List[Any]
+    model: str
 
 
 class RAGWorkflow:
@@ -26,13 +27,6 @@ class RAGWorkflow:
         self.vector_service = vector_service
         self.ollama_service = OllamaService()
         self.workflow = self._create_workflow()
-
-    def get_checkpointer(self):
-        # checkpointer = AsyncPostgresSaver.from_conn_string(
-        #     "postgresql+asyncpg://user:password@localhost/db"
-        # )
-        checkpointer = InMemorySaver()
-        return checkpointer
 
     def _create_workflow(self) -> StateGraph:
         """Create the LangGraph workflow for RAG."""
@@ -48,8 +42,8 @@ class RAGWorkflow:
         workflow.add_edge("retrieve", "generate")
         workflow.add_edge("generate", "format_response")
         workflow.add_edge("format_response", END)
-        check = self.get_checkpointer()
-        return workflow.compile()
+        checkpointer = InMemorySaver()
+        return workflow.compile(checkpointer=checkpointer)
 
     def _retrieve_documents(self, state: RAGState) -> RAGState:
         """Retrieve relevant documents based on the query."""
@@ -83,10 +77,13 @@ class RAGWorkflow:
             full_prompt = f"Context: {context_text}\n\nQuestion: {state['query']}"
 
             # Generate response using Ollama
-            response = self.ollama_service.chat(
-                prompt=full_prompt,
-                system_prompt=system_prompt,
-                model=getattr(state, "model", "llama2"),
+            # anyio.run(self.ollama_service.achat
+            response = asyncio.run(
+                self.ollama_service.chat(
+                    prompt=full_prompt,
+                    system_prompt=system_prompt,
+                    model=getattr(state, "model", "llama2"),
+                )
             )
 
             state["response"] = response
@@ -115,11 +112,12 @@ class RAGWorkflow:
         state = RAGState()
         state["query"] = message
         state["session_id"] = session_id or str(uuid.uuid4())
-        # state.model = model
-        CONFIG = {"configurable": {"thread_id": state["session_id"]}}
+        state["model"] = model
+
         # Run the workflow
         try:
-            final_state = self.workflow.invoke(state, config=CONFIG)
+            config1 = {"configurable": {"thread_id": state["session_id"]}}
+            final_state = self.workflow.invoke(state, config=config1)
 
             return {
                 "response": final_state["response"],
