@@ -6,8 +6,12 @@ import uuid
 import asyncio
 from services.ollama_service import OllamaService
 from services.vector_service import VectorService
-from langgraph.checkpoint.memory import InMemorySaver
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+from langgraph.checkpoint.sqlite import SqliteSaver
 
+import aiosqlite
+import threading
+import sqlite3
 
 from typing import TypedDict, List, Any, Optional
 
@@ -29,6 +33,8 @@ class RAGWorkflow:
         self.workflow = self._create_workflow()
 
     def _create_workflow(self) -> StateGraph:
+        conn = sqlite3.connect(database="chatbot.db", check_same_thread=False)
+        checkpointer = SqliteSaver(conn=conn)
         """Create the LangGraph workflow for RAG."""
         workflow = StateGraph(RAGState)
 
@@ -42,7 +48,7 @@ class RAGWorkflow:
         workflow.add_edge("retrieve", "generate")
         workflow.add_edge("generate", "format_response")
         workflow.add_edge("format_response", END)
-        checkpointer = InMemorySaver()
+
         return workflow.compile(checkpointer=checkpointer)
 
     def _retrieve_documents(self, state: RAGState) -> RAGState:
@@ -63,7 +69,6 @@ class RAGWorkflow:
         """Generate response using Ollama with retrieved context."""
         try:
             # Create context-aware prompt
-            # print(state.context)
             context_text = (
                 "\n\n".join(state["context"])
                 if state["context"]
@@ -77,7 +82,6 @@ class RAGWorkflow:
             full_prompt = f"Context: {context_text}\n\nQuestion: {state['query']}"
 
             # Generate response using Ollama
-            # anyio.run(self.ollama_service.achat
             response = asyncio.run(
                 self.ollama_service.chat(
                     prompt=full_prompt,
