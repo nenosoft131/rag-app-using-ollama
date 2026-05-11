@@ -1,30 +1,16 @@
-from sentence_transformers import SentenceTransformer
 from typing import List, Optional
 from langchain_community.vectorstores import FAISS
 from langchain.schema import Document
+from langchain_ollama import OllamaEmbeddings
+import os
 
 
 class VectorService:
     def __init__(self, collection_name: str = "pdf_documents"):
-        """
-        Initialize vector store with ChromaDB and sentence transformers.
-
-        Args:
-            collection_name: Name for the ChromaDB collection
-        """
-        # self.client = chromadb.Client()
-        # self.collection_name = collection_name
-        # self.collection = self.client.get_or_create_collection(name=self.collection_name)
-
-        # self.embedding_model = SentenceTransformer('all-MiniLM-L6-v2')
         self.vector_store = None
-
-        from langchain_ollama import OllamaEmbeddings
-
-        # 1️⃣ Setup Ollama embeddings
         self.embeddings = OllamaEmbeddings(
             model="nomic-embed-text",
-            base_url="http://localhost:11434",  # make sure Ollama is running
+            base_url=os.getenv("OLLAMA_HOST", "http://localhost:11434"),
         )
 
     def add_documents(self, texts: List[str], source_name: str = "unknown") -> None:

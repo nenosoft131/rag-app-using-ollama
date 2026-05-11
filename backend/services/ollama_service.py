@@ -1,17 +1,11 @@
 import ollama
+import os
 from typing import Optional
 
 class OllamaService:
-    def __init__(self, model: str = "llama2", host: str = "http://localhost:11434"):
-        """
-        Initialize Ollama service.
-        
-        Args:
-            model: Default model to use
-            host: Ollama server host
-        """
+    def __init__(self, model: str = "llama2", host: str = None):
         self.model = model
-        self.host = host
+        self.host = host or os.getenv("OLLAMA_HOST", "http://localhost:11434")
         
     async def chat(self, prompt: str, system_prompt: Optional[str] = None, model: str = "llama2") -> str:
         """

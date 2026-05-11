@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RAG App — Demo Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #0f1117; color: #e0e0e0; }
+
+  /* ── Header ── */
+  header {
+    background: linear-gradient(135deg, #1a1d2e 0%, #252840 100%);
+    border-bottom: 1px solid #2e3250;
+    padding: 18px 32px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  header h1 { font-size: 1.25rem; font-weight: 700; color: #fff; }
+  header .badge {
+    background: #4f46e5; color: #fff;
+    font-size: .7rem; padding: 2px 8px; border-radius: 12px; font-weight: 600;
+  }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #22c55e;
+                box-shadow: 0 0 6px #22c55e; margin-left: auto; }
+
+  /* ── Layout ── */
+  .grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px;
+          padding: 24px 32px; }
+  .grid-wide { grid-column: span 3; }
+  .grid-2 { grid-column: span 2; }
+
+  /* ── Cards ── */
+  .card {
+    background: #1a1d2e; border: 1px solid #2e3250; border-radius: 12px;
+    padding: 20px;
+  }
+  .card h2 { font-size: .8rem; font-weight: 600; color: #7c82a8;
+             text-transform: uppercase; letter-spacing: .06em; margin-bottom: 12px; }
+
+  /* ── KPI tiles ── */
+  .kpi { font-size: 2.4rem; font-weight: 800; color: #fff; }
+  .kpi-label { font-size: .8rem; color: #7c82a8; margin-top: 4px; }
+  .kpi-up   { color: #22c55e; font-size: .75rem; }
+  .kpi-down { color: #ef4444; font-size: .75rem; }
+
+  /* ── Agent pipeline ── */
+  .pipeline { display: flex; align-items: center; gap: 0; flex-wrap: wrap; }
+  .agent-box {
+    background: #252840; border: 1px solid #3b3f6b; border-radius: 8px;
+    padding: 12px 16px; min-width: 110px; text-align: center; position: relative;
+  }
+  .agent-box .name { font-size: .8rem; font-weight: 700; color: #a5b4fc; }
+  .agent-box .role { font-size: .68rem; color: #7c82a8; margin-top: 3px; }
+  .agent-box .calls { font-size: .7rem; color: #22c55e; margin-top: 6px; }
+  .arrow { color: #4f46e5; font-size: 1.2rem; padding: 0 6px; }
+  .branch {
+    display: flex; flex-direction: column; gap: 6px; align-items: flex-start;
+  }
+  .branch-label { font-size: .65rem; color: #6366f1; background: #1e2040;
+                  border-radius: 4px; padding: 2px 6px; }
+
+  /* ── Log stream ── */
+  .log { background: #0d0f1a; border-radius: 8px; padding: 14px;
+         font-family: "SF Mono", "Fira Code", monospace; font-size: .75rem;
+         line-height: 1.7; overflow-x: auto; }
+  .log .ts   { color: #4b5563; }
+  .log .info { color: #60a5fa; }
+  .log .ok   { color: #22c55e; }
+  .log .warn { color: #f59e0b; }
+  .log .err  { color: #ef4444; }
+  .log .dim  { color: #4b5563; }
+
+  /* ── Chat replay ── */
+  .chat { display: flex; flex-direction: column; gap: 12px; }
+  .bubble { padding: 10px 14px; border-radius: 10px; max-width: 88%;
+            font-size: .82rem; line-height: 1.55; }
+  .bubble.user { background: #4f46e5; color: #fff; align-self: flex-end;
+                 border-bottom-right-radius: 3px; }
+  .bubble.bot  { background: #252840; color: #d1d5db; align-self: flex-start;
+                 border-bottom-left-radius: 3px; }
+  .bubble .label { font-size: .65rem; font-weight: 700; opacity: .65;
+                   margin-bottom: 4px; }
+  .source-chip {
+    display: inline-block; background: #1e2040; border: 1px solid #3b3f6b;
+    border-radius: 4px; font-size: .65rem; color: #818cf8; padding: 2px 7px;
+    margin: 4px 4px 0 0;
+  }
+
+  /* ── Bar chart ── */
+  .bar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+  .bar-label { font-size: .75rem; color: #9ca3af; min-width: 80px; text-align: right; }
+  .bar-track { flex: 1; background: #252840; border-radius: 4px; height: 12px; }
+  .bar-fill  { height: 100%; border-radius: 4px;
+               background: linear-gradient(90deg, #4f46e5, #818cf8); }
+  .bar-val   { font-size: .72rem; color: #a5b4fc; min-width: 36px; }
+
+  /* ── Metric table ── */
+  table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+  th { color: #7c82a8; font-weight: 600; text-align: left; padding: 6px 10px;
+       border-bottom: 1px solid #2e3250; font-size: .7rem; text-transform: uppercase; }
+  td { padding: 8px 10px; border-bottom: 1px solid #1e2236; }
+  tr:last-child td { border-bottom: none; }
+  .pill { border-radius: 4px; padding: 2px 8px; font-size: .68rem; font-weight: 600; }
+  .pill.green  { background: #14532d; color: #4ade80; }
+  .pill.yellow { background: #713f12; color: #fbbf24; }
+  .pill.red    { background: #7f1d1d; color: #f87171; }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>PDF RAG Chat &nbsp;<span class="badge">Multi-Agent</span></h1>
+    <div style="font-size:.72rem;color:#7c82a8;margin-top:3px">
+      LangGraph · Ollama · FastAPI · Streamlit · FAISS
+    </div>
+  </div>
+  <div class="status-dot" title="Backend online"></div>
+</header>
+
+<!-- ── KPI row ── -->
+<div class="grid">
+
+  <div class="card">
+    <h2>Total Queries</h2>
+    <div class="kpi">1,284</div>
+    <div class="kpi-label">All time &nbsp;<span class="kpi-up">▲ 12% this week</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Avg Latency</h2>
+    <div class="kpi">3.2s</div>
+    <div class="kpi-label">End-to-end &nbsp;<span class="kpi-up">▼ 0.4s vs last week</span></div>
+  </div>
+
+  <div class="card">
+    <h2>Hallucination Rate</h2>
+    <div class="kpi">4.1%</div>
+    <div class="kpi-label">Grader rejections &nbsp;<span class="kpi-up">▼ 1.2%</span></div>
+  </div>
+
+  <!-- ── Agent pipeline ── -->
+  <div class="card grid-wide">
+    <h2>Multi-Agent Workflow</h2>
+    <div class="pipeline" style="margin-top:8px">
+
+      <div class="agent-box" style="border-color:#6366f1">
+        <div class="name">Router</div>
+        <div class="role">Classifies query</div>
+        <div class="calls">1,284 calls</div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;align-items:center;padding:0 4px">
+        <span class="branch-label">retrieval</span>
+        <span class="arrow">→</span>
+        <span class="branch-label">general</span>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:8px">
+        <div class="agent-box" style="border-color:#818cf8">
+          <div class="name">Retrieval</div>
+          <div class="role">FAISS top-4</div>
+          <div class="calls">1,011 calls</div>
+        </div>
+        <div style="font-size:.65rem;color:#4b5563;text-align:center">↓ skip (general)</div>
+      </div>
+
+      <span class="arrow">→</span>
+
+      <div class="agent-box" style="border-color:#a78bfa">
+        <div class="name">Grader</div>
+        <div class="role">Relevance filter</div>
+        <div class="calls">1,011 calls<br><span style="color:#f59e0b">87 retries</span></div>
+      </div>
+
+      <span class="arrow">→</span>
+
+      <div class="agent-box" style="border-color:#c4b5fd">
+        <div class="name">Generator</div>
+        <div class="role">LLM answer</div>
+        <div class="calls">1,284 calls</div>
+      </div>
+
+      <span class="arrow">→</span>
+
+      <div class="agent-box" style="border-color:#e9d5ff">
+        <div class="name">Hallucination<br>Grader</div>
+        <div class="role">Groundedness</div>
+        <div class="calls">1,011 calls<br><span style="color:#ef4444">53 regenerated</span></div>
+      </div>
+
+      <span class="arrow">→</span>
+
+      <div class="agent-box" style="border-color:#22c55e;background:#0d2018">
+        <div class="name" style="color:#4ade80">END</div>
+        <div class="role">Response sent</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Live log ── -->
+  <div class="card grid-2">
+    <h2>Agent Execution Log</h2>
+    <div class="log">
+<span class="ts">10:42:31</span> <span class="info">[Router]</span>           Classifying query: <span style="color:#d1d5db">"What does section 3 say?"</span>
+<span class="ts">10:42:32</span> <span class="ok">[Router]</span>            → retrieval
+<span class="ts">10:42:32</span> <span class="info">[Retrieval]</span>        Fetching documents...
+<span class="ts">10:42:32</span> <span class="ok">[Retrieval]</span>         Found 4 chunks
+<span class="ts">10:42:32</span> <span class="info">[Grader]</span>           Scoring document relevance...
+<span class="ts">10:42:33</span> <span class="ok">[Grader]</span>            3/4 docs passed
+<span class="ts">10:42:33</span> <span class="info">[Generator]</span>        Generating response...
+<span class="ts">10:42:36</span> <span class="ok">[Generator]</span>         Response ready (312 tokens)
+<span class="ts">10:42:36</span> <span class="info">[Hallucination Grader]</span>  Checking answer grounding...
+<span class="ts">10:42:37</span> <span class="ok">[Hallucination Grader]</span>  → grounded ✓
+<span class="ts">10:42:37</span> <span class="dim">──────────────────────────────────────────</span>
+<span class="ts">10:43:05</span> <span class="info">[Router]</span>           Classifying query: <span style="color:#d1d5db">"Hello, how are you?"</span>
+<span class="ts">10:43:05</span> <span class="ok">[Router]</span>            → general (skipping retrieval)
+<span class="ts">10:43:05</span> <span class="info">[Generator]</span>        Generating response...
+<span class="ts">10:43:07</span> <span class="ok">[Generator]</span>         Response ready (58 tokens)
+<span class="ts">10:43:07</span> <span class="info">[Hallucination Grader]</span>  No context — auto grounded ✓
+<span class="ts">10:43:07</span> <span class="dim">──────────────────────────────────────────</span>
+<span class="ts">10:44:18</span> <span class="info">[Router]</span>           Classifying query: <span style="color:#d1d5db">"Summarise the contract clauses"</span>
+<span class="ts">10:44:18</span> <span class="ok">[Router]</span>            → retrieval
+<span class="ts">10:44:18</span> <span class="info">[Retrieval]</span>        Fetching documents...
+<span class="ts">10:44:19</span> <span class="ok">[Retrieval]</span>         Found 4 chunks
+<span class="ts">10:44:19</span> <span class="info">[Grader]</span>           Scoring document relevance...
+<span class="ts">10:44:21</span> <span class="warn">[Grader]</span>            0/4 docs passed — retrying retrieval (attempt 1)
+<span class="ts">10:44:21</span> <span class="info">[Retrieval]</span>        Fetching documents... (retry)
+<span class="ts">10:44:22</span> <span class="ok">[Retrieval]</span>         Found 4 chunks
+<span class="ts">10:44:22</span> <span class="info">[Grader]</span>           Scoring document relevance...
+<span class="ts">10:44:24</span> <span class="ok">[Grader]</span>            2/4 docs passed
+<span class="ts">10:44:24</span> <span class="info">[Generator]</span>        Generating response...
+<span class="ts">10:44:28</span> <span class="ok">[Generator]</span>         Response ready (541 tokens)
+<span class="ts">10:44:28</span> <span class="info">[Hallucination Grader]</span>  Checking answer grounding...
+<span class="ts">10:44:29</span> <span class="warn">[Hallucination Grader]</span>  → not_grounded — regenerating (attempt 1)
+<span class="ts">10:44:29</span> <span class="info">[Generator]</span>        Generating response... (retry)
+<span class="ts">10:44:33</span> <span class="ok">[Generator]</span>         Response ready (489 tokens)
+<span class="ts">10:44:33</span> <span class="info">[Hallucination Grader]</span>  Checking answer grounding...
+<span class="ts">10:44:34</span> <span class="ok">[Hallucination Grader]</span>  → grounded ✓
+    </div>
+  </div>
+
+  <!-- ── RAGAS metrics ── -->
+  <div class="card">
+    <h2>RAGAS Evaluation</h2>
+    <div style="margin-top:6px">
+      <div class="bar-row">
+        <div class="bar-label">Faithfulness</div>
+        <div class="bar-track"><div class="bar-fill" style="width:87%"></div></div>
+        <div class="bar-val">0.87</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Answer Rel.</div>
+        <div class="bar-track"><div class="bar-fill" style="width:91%"></div></div>
+        <div class="bar-val">0.91</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Ctx Precision</div>
+        <div class="bar-track"><div class="bar-fill" style="width:79%"></div></div>
+        <div class="bar-val">0.79</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Ctx Recall</div>
+        <div class="bar-track"><div class="bar-fill" style="width:83%"></div></div>
+        <div class="bar-val">0.83</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── API endpoint table ── -->
+  <div class="card grid-2">
+    <h2>API Endpoints</h2>
+    <table>
+      <thead>
+        <tr><th>Method</th><th>Path</th><th>Avg (ms)</th><th>P99 (ms)</th><th>Status</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>POST</td><td>/chat</td><td>3 210</td><td>8 440</td>
+            <td><span class="pill green">OK</span></td></tr>
+        <tr><td>POST</td><td>/upload</td><td>420</td><td>1 100</td>
+            <td><span class="pill green">OK</span></td></tr>
+        <tr><td>GET</td><td>/documents</td><td>4</td><td>12</td>
+            <td><span class="pill green">OK</span></td></tr>
+        <tr><td>DELETE</td><td>/documents</td><td>6</td><td>18</td>
+            <td><span class="pill green">OK</span></td></tr>
+        <tr><td>GET</td><td>/</td><td>1</td><td>3</td>
+            <td><span class="pill green">OK</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ── Chat replay ── -->
+  <div class="card">
+    <h2>Chat Replay — Session #a4473c</h2>
+    <div class="chat">
+      <div class="bubble user">
+        <div class="label">USER</div>
+        What does the indemnification clause say?
+      </div>
+      <div class="bubble bot">
+        <div class="label">ASSISTANT &nbsp;·&nbsp; retrieval path &nbsp;·&nbsp; 3.1s</div>
+        According to section 8 of the uploaded agreement, the indemnification clause
+        states that each party shall defend and hold harmless the other from any
+        third-party claims arising out of their own negligence or wilful misconduct…
+        <div style="margin-top:8px">
+          <span class="source-chip">contract.pdf · chunk 12</span>
+          <span class="source-chip">contract.pdf · chunk 14</span>
+          <span class="source-chip">contract.pdf · chunk 9</span>
+        </div>
+      </div>
+      <div class="bubble user">
+        <div class="label">USER</div>
+        Thanks! And what's the governing law?
+      </div>
+      <div class="bubble bot">
+        <div class="label">ASSISTANT &nbsp;·&nbsp; retrieval path &nbsp;·&nbsp; 2.8s</div>
+        The governing law is stated in section 14 as the laws of the State of
+        Delaware, with disputes subject to the exclusive jurisdiction of the
+        courts located in Wilmington, Delaware.
+        <div style="margin-top:8px">
+          <span class="source-chip">contract.pdf · chunk 21</span>
+        </div>
+      </div>
+      <div class="bubble user">
+        <div class="label">USER</div>
+        Hello, can you help me?
+      </div>
+      <div class="bubble bot">
+        <div class="label">ASSISTANT &nbsp;·&nbsp; general path &nbsp;·&nbsp; 1.9s</div>
+        Of course! I'm here to help. You can ask me questions about any
+        documents you've uploaded, or ask general questions.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Model usage & doc store ── -->
+  <div class="card">
+    <h2>Model Usage</h2>
+    <table>
+      <thead><tr><th>Model</th><th>Queries</th><th>Share</th></tr></thead>
+      <tbody>
+        <tr><td>llama2</td><td>812</td><td>63%</td></tr>
+        <tr><td>mistral</td><td>341</td><td>27%</td></tr>
+        <tr><td>codellama</td><td>131</td><td>10%</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Document Store</h2>
+    <table>
+      <thead><tr><th>File</th><th>Chunks</th><th>Uploaded</th></tr></thead>
+      <tbody>
+        <tr><td>contract.pdf</td><td>48</td><td>today 10:30</td></tr>
+        <tr><td>policy_v2.pdf</td><td>31</td><td>yesterday</td></tr>
+        <tr><td>report_q1.pdf</td><td>67</td><td>2 days ago</td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top:12px;font-size:.75rem;color:#7c82a8">
+      146 total chunks &nbsp;·&nbsp; FAISS index &nbsp;·&nbsp;
+      <span style="color:#f59e0b">in-memory (not persisted)</span>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Agent Retry Rates</h2>
+    <div style="margin-top:6px">
+      <div class="bar-row">
+        <div class="bar-label">Grader retry</div>
+        <div class="bar-track"><div class="bar-fill" style="width:8.6%;background:linear-gradient(90deg,#f59e0b,#fbbf24)"></div></div>
+        <div class="bar-val">8.6%</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">Halluc. retry</div>
+        <div class="bar-track"><div class="bar-fill" style="width:5.2%;background:linear-gradient(90deg,#ef4444,#f87171)"></div></div>
+        <div class="bar-val">5.2%</div>
+      </div>
+      <div class="bar-row">
+        <div class="bar-label">General route</div>
+        <div class="bar-track"><div class="bar-fill" style="width:21%;background:linear-gradient(90deg,#06b6d4,#67e8f9)"></div></div>
+        <div class="bar-val">21%</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div style="text-align:center;padding:16px;font-size:.7rem;color:#4b5563">
+  Backend: FastAPI :8000 &nbsp;·&nbsp; Frontend: Streamlit :8501 &nbsp;·&nbsp;
+  Ollama: localhost:11434 &nbsp;·&nbsp; Checkpoint: chatbot.db (SQLite)
+</div>
+
+</body>
+</html>
