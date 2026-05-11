@@ -7,6 +7,12 @@ import sqlite3
 from langgraph.checkpoint.sqlite import SqliteSaver
 from services.ollama_service import OllamaService
 from services.vector_service import VectorService
+from stats import stats
+
+
+def _log(msg: str):
+    print(msg)
+    stats.add_log(msg)
 
 
 class RAGState(TypedDict, total=False):
@@ -74,11 +80,12 @@ class RAGWorkflow:
     # Agent 1 — Router
     # ------------------------------------------------------------------
     def _router_agent(self, state: RAGState) -> RAGState:
-        print("[Router] Classifying query...")
+        _log("[Router] Classifying query...")
 
         if self.vector_service.get_vector_size() == 0:
-            print("[Router] No documents loaded → general")
+            _log("[Router] No documents loaded → general")
             state["route"] = "general"
+            stats.inc("general_route")
             return state
 
         prompt = (
@@ -95,22 +102,23 @@ class RAGWorkflow:
             )
         )
         route = "retrieval" if "retrieval" in reply.lower() else "general"
-        print(f"[Router] → {route}")
+        _log(f"[Router] → {route}")
         state["route"] = route
+        stats.inc("retrieval_route" if route == "retrieval" else "general_route")
         return state
 
     # ------------------------------------------------------------------
     # Agent 2 — Retrieval
     # ------------------------------------------------------------------
     def _retrieval_agent(self, state: RAGState) -> RAGState:
-        print("[Retrieval] Fetching documents...")
+        _log("[Retrieval] Fetching documents...")
         try:
             result = self.vector_service.search(state["query"], k=4)
             state["context"] = result.get("context", [])
             state["sources"] = result
-            print(f"[Retrieval] Found {len(state['context'])} chunks")
+            _log(f"[Retrieval] Found {len(state['context'])} chunks")
         except Exception as e:
-            print(f"[Retrieval] Error: {e}")
+            _log(f"[Retrieval] Error: {e}")
             state["context"] = []
             state["sources"] = []
         return state
@@ -119,13 +127,14 @@ class RAGWorkflow:
     # Agent 3 — Relevance Grader
     # ------------------------------------------------------------------
     def _relevance_grader_agent(self, state: RAGState) -> RAGState:
-        print("[Grader] Scoring document relevance...")
+        _log("[Grader] Scoring document relevance...")
         query = state["query"]
         docs = state.get("context", [])
 
         if not docs:
             state["filtered_context"] = []
             state["retrieval_retry"] = state.get("retrieval_retry", 0) + 1
+            stats.inc("grader_retries")
             return state
 
         filtered = []
@@ -146,29 +155,29 @@ class RAGWorkflow:
             if "yes" in reply.lower():
                 filtered.append(doc)
 
-        print(f"[Grader] {len(filtered)}/{len(docs)} docs passed")
+        _log(f"[Grader] {len(filtered)}/{len(docs)} docs passed")
         state["filtered_context"] = filtered
 
         if not filtered:
             state["retrieval_retry"] = state.get("retrieval_retry", 0) + 1
+            stats.inc("grader_retries")
 
         return state
 
     def _grader_route(self, state: RAGState) -> str:
         if state.get("filtered_context"):
             return "generate"
-        # Allow one retry before giving up and generating anyway
         if state.get("retrieval_retry", 0) <= 1:
-            print("[Grader] No relevant docs — retrying retrieval")
+            _log("[Grader] No relevant docs — retrying retrieval")
             return "retry"
-        print("[Grader] Still no relevant docs after retry — generating without context")
+        _log("[Grader] Still no relevant docs after retry — generating without context")
         return "generate"
 
     # ------------------------------------------------------------------
     # Agent 4 — Generator
     # ------------------------------------------------------------------
     def _generator_agent(self, state: RAGState) -> RAGState:
-        print("[Generator] Generating response...")
+        _log("[Generator] Generating response...")
         context_docs = state.get("filtered_context") or state.get("context", [])
         context_text = "\n\n".join(context_docs) if context_docs else "No relevant context found."
 
@@ -188,7 +197,7 @@ class RAGWorkflow:
             )
             state["response"] = response
         except Exception as e:
-            print(f"[Generator] Error: {e}")
+            _log(f"[Generator] Error: {e}")
             state["response"] = f"Error generating response: {str(e)}"
 
         return state
@@ -197,10 +206,9 @@ class RAGWorkflow:
     # Agent 5 — Hallucination Grader
     # ------------------------------------------------------------------
     def _hallucination_grader_agent(self, state: RAGState) -> RAGState:
-        print("[Hallucination Grader] Checking answer grounding...")
+        _log("[Hallucination Grader] Checking answer grounding...")
         context_docs = state.get("filtered_context") or state.get("context", [])
 
-        # Nothing to check against — trust the answer
         if not context_docs:
             state["hallucination_check"] = "grounded"
             return state
@@ -220,17 +228,18 @@ class RAGWorkflow:
             )
         )
         check = "grounded" if "yes" in reply.lower() else "not_grounded"
-        print(f"[Hallucination Grader] → {check}")
+        _log(f"[Hallucination Grader] → {check}")
         state["hallucination_check"] = check
 
         if check == "not_grounded":
             state["generation_retry"] = state.get("generation_retry", 0) + 1
+            stats.inc("hallucination_retries")
 
         return state
 
     def _hallucination_route(self, state: RAGState) -> str:
         if state.get("hallucination_check") == "not_grounded" and state.get("generation_retry", 0) <= 1:
-            print("[Hallucination Grader] Not grounded — regenerating")
+            _log("[Hallucination Grader] Not grounded — regenerating")
             return "regenerate"
         return "end"
 

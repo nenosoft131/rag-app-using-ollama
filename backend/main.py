@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from services.rag_workflow import RAGWorkflow
 from services.pdf_service import PDFService
 from services.vector_service import VectorService
+from stats import stats
 
 load_dotenv()
 
@@ -65,6 +66,7 @@ async def upload_document(file: UploadFile = File(...)):
 
         chunks = pdf_service.chunk_text(text)
         vector_service.add_documents(chunks, file.filename)
+        stats.inc("docs_uploaded")
 
         return DocumentResponse(
             message=f"Successfully processed {file.filename}",
@@ -79,18 +81,26 @@ async def upload_document(file: UploadFile = File(...)):
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
     """Chat with the RAG system."""
+    stats.inc("total_queries")
     try:
         response = rag_workflow.process_message(
             message=request.message, session_id=request.session_id, model=request.model
         )
-
         return ChatResponse(
             response=response["response"],
             session_id=response["session_id"],
-            # sources=response.get("sources", [])
         )
     except Exception as e:
+        stats.inc("errors")
         raise HTTPException(status_code=500, detail=f"Error processing chat: {str(e)}")
+
+
+@app.get("/stats")
+def get_stats():
+    """Live agent execution statistics."""
+    data = stats.snapshot()
+    data["document_count"] = vector_service.get_vector_size()
+    return data
 
 
 @app.get("/documents")

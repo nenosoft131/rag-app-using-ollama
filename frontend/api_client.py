@@ -78,3 +78,11 @@ class RAGAPIClient:
             return docs_info.get("available_models", ["llama2", "mistral", "codellama"])
         except Exception:
             return ["llama2", "mistral", "codellama"]
+
+    def get_stats(self) -> Dict[str, Any]:
+        try:
+            response = self.session.get(f"{self.base_url}/stats", timeout=5)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to get stats: {str(e)}")
