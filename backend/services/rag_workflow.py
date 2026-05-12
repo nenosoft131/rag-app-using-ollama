@@ -94,14 +94,19 @@ class RAGWorkflow:
             "- 'general': a general knowledge or conversational question\n\n"
             f"Question: {state['query']}"
         )
-        reply = asyncio.run(
-            self.ollama_service.chat(
-                prompt=prompt,
-                system_prompt="You are a query router. Reply with exactly one word.",
-                model=state.get("model", "llama2"),
+        try:
+            reply = asyncio.run(
+                self.ollama_service.chat(
+                    prompt=prompt,
+                    system_prompt="You are a query router. Reply with exactly one word.",
+                    model=state.get("model", "llama2"),
+                )
             )
-        )
-        route = "retrieval" if "retrieval" in reply.lower() else "general"
+            route = "retrieval" if "retrieval" in reply.lower() else "general"
+        except Exception as e:
+            _log(f"[Router] LLM error after retries: {e} — defaulting to retrieval")
+            route = "retrieval"
+
         _log(f"[Router] → {route}")
         state["route"] = route
         stats.inc("retrieval_route" if route == "retrieval" else "general_route")
@@ -145,15 +150,19 @@ class RAGWorkflow:
                 f"Question: {query}\n"
                 f"Document: {doc[:600]}"
             )
-            reply = asyncio.run(
-                self.ollama_service.chat(
-                    prompt=prompt,
-                    system_prompt="You are a relevance grader. Reply only yes or no.",
-                    model=state.get("model", "llama2"),
+            try:
+                reply = asyncio.run(
+                    self.ollama_service.chat(
+                        prompt=prompt,
+                        system_prompt="You are a relevance grader. Reply only yes or no.",
+                        model=state.get("model", "llama2"),
+                    )
                 )
-            )
-            if "yes" in reply.lower():
-                filtered.append(doc)
+                if "yes" in reply.lower():
+                    filtered.append(doc)
+            except Exception as e:
+                _log(f"[Grader] LLM error grading doc after retries: {e} — keeping doc")
+                filtered.append(doc)  # include on failure to avoid losing context
 
         _log(f"[Grader] {len(filtered)}/{len(docs)} docs passed")
         state["filtered_context"] = filtered
@@ -220,14 +229,19 @@ class RAGWorkflow:
             f"Context: {context_text}\n\n"
             f"Answer: {state.get('response', '')}"
         )
-        reply = asyncio.run(
-            self.ollama_service.chat(
-                prompt=prompt,
-                system_prompt="You are a hallucination grader. Reply only yes or no.",
-                model=state.get("model", "llama2"),
+        try:
+            reply = asyncio.run(
+                self.ollama_service.chat(
+                    prompt=prompt,
+                    system_prompt="You are a hallucination grader. Reply only yes or no.",
+                    model=state.get("model", "llama2"),
+                )
             )
-        )
-        check = "grounded" if "yes" in reply.lower() else "not_grounded"
+            check = "grounded" if "yes" in reply.lower() else "not_grounded"
+        except Exception as e:
+            _log(f"[Hallucination Grader] LLM error after retries: {e} — assuming grounded")
+            check = "grounded"
+
         _log(f"[Hallucination Grader] → {check}")
         state["hallucination_check"] = check
 

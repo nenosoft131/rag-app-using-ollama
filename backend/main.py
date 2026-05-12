@@ -1,8 +1,9 @@
 import os
 os.environ.setdefault("KMP_DUPLICATE_LIB_OK", "TRUE")
 
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from typing import List, Optional
 import uvicorn
@@ -17,6 +18,20 @@ from stats import stats
 load_dotenv()
 
 app = FastAPI(title="PDF RAG API", version="1.0.0")
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    msg = str(exc)
+    if any(k in msg.lower() for k in ("connection refused", "connect call failed", "ollama")):
+        return JSONResponse(
+            status_code=503,
+            content={"error": "Ollama service unavailable. Ensure Ollama is running on the configured host.", "detail": msg},
+        )
+    return JSONResponse(
+        status_code=500,
+        content={"error": "Internal server error.", "detail": msg},
+    )
 
 app.add_middleware(
     CORSMiddleware,
@@ -95,7 +110,10 @@ def chat(request: ChatRequest):
         )
     except Exception as e:
         stats.inc("errors")
-        raise HTTPException(status_code=500, detail=f"Error processing chat: {str(e)}")
+        msg = str(e)
+        if any(k in msg.lower() for k in ("connection refused", "connect call failed", "ollama")):
+            raise HTTPException(status_code=503, detail="Ollama service unavailable. Ensure Ollama is running.")
+        raise HTTPException(status_code=500, detail=f"Error processing chat: {msg}")
 
 
 @app.get("/stats")
