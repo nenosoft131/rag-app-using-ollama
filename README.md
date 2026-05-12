@@ -1,183 +1,179 @@
-# RAG app using Ollama
+# RAG App using Ollama
 
-A modern RAG (Retrieval-Augmented Generation) application with separated frontend and backend architecture using LangGraph, FastAPI, and Streamlit.
+A locally-running PDF question-answering system built with an agentic RAG pipeline. Upload a PDF, ask questions, and get answers grounded in the document — all running on your machine via Ollama (no cloud API required).
 
 ## Architecture
 
+```
+frontend/          (Streamlit)
+    ↕ HTTP
+backend/           (FastAPI)
+    ↕
+LangGraph Pipeline → Ollama (LLM + Embeddings) + FAISS (Vector Store) + SQLite (Memory)
+```
+
 ### Backend (FastAPI + LangGraph)
 
-- **FastAPI**: RESTful API server
-- **LangGraph**: Workflow orchestration for RAG pipeline
-- **FAISS**: Vector storage for document embeddings
-- **Ollama**: LLM integration for response generation
-- **Ollama (nomic-embed-text)**: Text embeddings
+- **FastAPI** — RESTful API server
+- **LangGraph** — agentic pipeline with conditional routing and retry loops
+- **FAISS** — in-memory vector store for document embeddings
+- **Ollama** — local LLM (llama2 / mistral / codellama) and `nomic-embed-text` embeddings
+- **SQLite** — persistent conversation memory via LangGraph's `SqliteSaver`
 
 ### Frontend (Streamlit)
 
-- **Streamlit**: Web interface for document upload and chat
-- **API Client**: HTTP client for backend communication
+- **Chat page** — PDF upload, model selector, multi-session chat with source viewing
+- **Dashboard page** — live pipeline metrics, agent call counts, retry rates, and color-coded execution logs
 
-![My Image](images/Screenshot.png)
+![Screenshot](images/Screenshot.png)
+
+## Agentic Pipeline
+
+Queries run through a 5-node LangGraph graph with dynamic routing and self-correction:
+
+```
+Router → Retrieve → Relevance Grader ⟳(retry) → Generator → Hallucination Grader ⟳(regenerate) → END
+         ↘ (general query) ↗
+```
+
+| Node | Role |
+|---|---|
+| **Router** | Classifies the query: needs document retrieval or can answer directly |
+| **Retrieve** | Fetches top-4 chunks from FAISS using semantic similarity |
+| **Relevance Grader** | Filters out chunks not relevant to the query; retries retrieval if none pass |
+| **Generator** | Produces an answer using the filtered context |
+| **Hallucination Grader** | Verifies the answer is grounded in retrieved docs; triggers regeneration if not |
 
 ## Features
 
-- 📄 PDF document upload and processing
-- 🔍 Semantic search with vector embeddings
-- 💬 Chat interface with context-aware responses
-- 🤖 Integration with Ollama models (Llama2)
-- 🔄 LangGraph workflow for RAG pipeline
-- 🌐 Separated frontend/backend architecture
-- 📊 Real-time document chunking and indexing
-- 🎯 Session-based conversation continuity
+- PDF document upload and processing
+- Semantic search with vector embeddings
+- Multi-session chat with persistent conversation history (SQLite)
+- Agentic self-correction — relevance grading and hallucination checking with automatic retries
+- Support for multiple Ollama models (llama2, mistral, codellama)
+- Live dashboard with pipeline metrics and agent execution logs
+- Fully local — no external API calls
 
 ## Setup
 
 ### Prerequisites
 
-1. **Ollama Installation**: Install and start Ollama
+1. **Ollama** — install and pull a model:
 
    ```bash
-   # Install Ollama
    curl -fsSL https://ollama.ai/install.sh | sh
-
-   # Start Ollama server
    ollama serve
 
-   # Pull a model
    ollama pull llama2
+   ollama pull nomic-embed-text   # required for embeddings
    ```
 
-2. **Python Environment**: Python 3.9+
+2. **Python 3.9+**
 
 ### Installation
 
-1. **Backend Setup**:
+```bash
+# Backend
+cd backend
+pip install -r requirements.txt
 
-   ```bash
-   cd backend
-   pip install -r requirements.txt
-   ```
+# Frontend
+cd frontend
+pip install -r requirements.txt
+```
 
-2. **Frontend Setup**:
-   ```bash
-   cd frontend
-   pip install -r requirements.txt
-   ```
-
-## Running the Application
+## Running
 
 ### 1. Start the Backend
 
 ```bash
 cd backend
 python main.py
+# API available at http://localhost:8000
 ```
-
-The backend will start on `http://localhost:8000`
 
 ### 2. Start the Frontend
 
 ```bash
 cd frontend
 streamlit run app.py
+# UI available at http://localhost:8501
 ```
-
-The frontend will start on `http://localhost:8501`
 
 ## API Endpoints
 
-### Backend Endpoints
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | Health check |
+| `POST` | `/upload` | Upload and process a PDF |
+| `POST` | `/chat` | Send a message |
+| `GET` | `/documents` | Get document store info |
+| `DELETE` | `/documents` | Clear all documents |
+| `GET` | `/stats` | Get pipeline metrics (used by dashboard) |
 
-- `GET /`: Health check
-- `POST /upload`: Upload and process PDF documents
-- `POST /chat`: Chat with the RAG system
-- `GET /documents`: Get document information
-- `DELETE /documents`: Clear all documents
-
-### Usage Examples
-
-#### Upload Document
+### Examples
 
 ```bash
+# Upload a PDF
 curl -X POST "http://localhost:8000/upload" \
-  -H "accept: application/json" \
-  -H "Content-Type: multipart/form-data" \
   -F "file=@document.pdf"
-```
 
-#### Chat
-
-```bash
+# Chat
 curl -X POST "http://localhost:8000/chat" \
-  -H "accept: application/json" \
   -H "Content-Type: application/json" \
-  -d '{
-    "message": "What is this document about?",
-    "model": "llama2"
-  }'
+  -d '{"message": "What is this document about?", "model": "llama2"}'
 ```
-
-## LangGraph Workflow
-
-The RAG pipeline is implemented using LangGraph with the following nodes:
-
-1. **Retrieve**: Search for relevant documents using vector similarity
-2. **Generate**: Create response using Ollama with retrieved context
-3. **Format**: Format the final response with sources
 
 ## Configuration
 
 ### Environment Variables
 
-Backend:
-
-- `OLLAMA_HOST`: Ollama server host (default: `http://localhost:11434`)
-
-Frontend:
-
-- `API_BASE_URL`: Backend API URL (default: `http://localhost:8000`)
+| Variable | Default | Description |
+|---|---|---|
+| `OLLAMA_HOST` | `http://localhost:11434` | Ollama server URL (backend) |
+| `API_BASE_URL` | `http://localhost:8000` | Backend URL (frontend) |
 
 ### Default Settings
 
 - Embedding model: `nomic-embed-text`
-- Chunk size: 1000 characters with 200 character overlap
-- Search results: 4 most relevant chunks
+- Chunk size: 1000 characters, 200-character overlap
+- Retrieval top-k: 4 chunks
 - Default LLM: `llama2`
 
 ## Project Structure
 
 ```
 ├── backend/
-│   ├── main.py                 # FastAPI application
+│   ├── main.py                    # FastAPI app and route definitions
+│   ├── stats.py                   # In-memory pipeline metrics tracker
 │   ├── services/
-│   │   ├── rag_workflow.py     # LangGraph RAG workflow
-│   │   ├── pdf_service.py      # PDF processing
-│   │   ├── vector_service.py   # Vector storage
-│   │   └── ollama_service.py   # Ollama integration
+│   │   ├── rag_workflow.py        # LangGraph agentic pipeline
+│   │   ├── pdf_service.py         # PDF parsing and chunking
+│   │   ├── vector_service.py      # FAISS vector store wrapper
+│   │   └── ollama_service.py      # Ollama LLM and embedding client
+│   ├── evaluation/
+│   │   ├── evaluate.py            # RAGAS evaluation runner
+│   │   └── evaluation_dataset.py  # Test dataset
 │   └── requirements.txt
 ├── frontend/
-│   ├── app.py                  # Streamlit application
-│   ├── api_client.py           # API client
+│   ├── app.py                     # Chat page (Streamlit)
+│   ├── pages/
+│   │   └── 1_Dashboard.py         # Live pipeline dashboard
+│   ├── api_client.py              # HTTP client for backend
 │   └── requirements.txt
+├── docker-compose.yml
 └── README.md
+```
+
+## Docker
+
+```bash
+docker-compose up --build
 ```
 
 ## Troubleshooting
 
-### Backend Issues
-
-- **Ollama Connection**: Ensure Ollama is running on `localhost:11434`
-- **Model Not Found**: The app will automatically pull models if available
-- **Vector Storage**: FAISS runs in-memory by default
-
-### Frontend Issues
-
-- **API Connection**: Ensure backend is running on `localhost:8000`
-- **CORS Issues**: Backend includes CORS middleware for frontend access
-- **File Upload**: Check file size limits and PDF format
-
-### Development Tips
-
-- Use `uvicorn main:app --reload` for backend development
-- Use `streamlit run app.py --server.reload` for frontend development
-- Check browser console for API errors
+- **Ollama not connecting** — ensure `ollama serve` is running on port 11434
+- **Model not found** — run `ollama pull <model-name>` before starting the backend
+- **API connection error in UI** — ensure the backend is running on port 8000
+- **CORS issues** — backend includes CORS middleware; check `API_BASE_URL` env var
