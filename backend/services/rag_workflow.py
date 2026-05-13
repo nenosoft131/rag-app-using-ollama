@@ -3,6 +3,7 @@ from langgraph.graph import StateGraph, END
 import uuid
 import asyncio
 import sqlite3
+import time
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 from services.ollama_service import OllamaService
@@ -272,19 +273,33 @@ class RAGWorkflow:
             "generation_retry": 0,
         }
 
+        start = time.time()
+        success = True
+        route = "unknown"
+        retries = 0
+        final_state: RAGState = {}
+
         try:
             config = {"configurable": {"thread_id": sid}}
             final_state = self.workflow.invoke(initial_state, config=config)
-
-            return {
+            route = final_state.get("route", "unknown")
+            retries = (final_state.get("retrieval_retry", 0) +
+                       final_state.get("generation_retry", 0))
+            result = {
                 "response": final_state.get("response", "No response generated."),
                 "session_id": final_state.get("session_id", sid),
                 "sources": final_state.get("sources", []),
             }
         except Exception as e:
+            success = False
             print(f"[Workflow] Error: {e}")
-            return {
+            result = {
                 "response": f"Error processing message: {str(e)}",
                 "session_id": sid,
                 "sources": [],
             }
+        finally:
+            latency_ms = int((time.time() - start) * 1000)
+            stats.add_query(message, route, model, retries, latency_ms, success)
+
+        return result

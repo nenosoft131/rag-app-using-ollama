@@ -9,21 +9,21 @@ frontend/          (Streamlit)
     ↕ HTTP
 backend/           (FastAPI)
     ↕
-LangGraph Pipeline → Ollama (LLM + Embeddings) + FAISS (Vector Store) + SQLite (Memory)
+LangGraph Pipeline → Ollama (LLM + Embeddings) + FAISS (Vector Store) + SQLite (Memory + Stats)
 ```
 
 ### Backend (FastAPI + LangGraph)
 
-- **FastAPI** — RESTful API server
+- **FastAPI** — RESTful API server with structured error responses and 503 handling for Ollama downtime
 - **LangGraph** — agentic pipeline with conditional routing and retry loops
 - **FAISS** — in-memory vector store for document embeddings
 - **Ollama** — local LLM (llama2 / mistral / codellama) and `nomic-embed-text` embeddings
-- **SQLite** — persistent conversation memory via LangGraph's `SqliteSaver`
+- **SQLite** — persistent conversation memory (LangGraph `SqliteSaver`) and persistent pipeline stats
 
 ### Frontend (Streamlit)
 
 - **Chat page** — PDF upload, model selector, multi-session chat with source viewing
-- **Dashboard page** — live pipeline metrics, agent call counts, retry rates, and color-coded execution logs
+- **Dashboard page** — live charts, pipeline metrics, recent queries table, filtered execution logs
 
 ![Screenshot](images/Screenshot.png)
 
@@ -51,8 +51,29 @@ Router → Retrieve → Relevance Grader ⟳(retry) → Generator → Hallucinat
 - Multi-session chat with persistent conversation history (SQLite)
 - Agentic self-correction — relevance grading and hallucination checking with automatic retries
 - Support for multiple Ollama models (llama2, mistral, codellama)
-- Live dashboard with pipeline metrics and agent execution logs
+- **Retry logic** — LLM calls retry up to 3 times with exponential backoff (via `tenacity`)
+- **Timeout handling** — 60-second HTTP timeout on all Ollama calls
+- **Structured error responses** — 503 when Ollama is unreachable, 400/500 for other errors
+- **Persistent stats** — query metrics and history survive backend restarts (stored in SQLite)
+- **Live dashboard** with charts, recent query table, log search/filter, and pause control
 - Fully local — no external API calls
+
+## Dashboard
+
+The dashboard page (`/Dashboard`) auto-refreshes and shows:
+
+| Section | What it shows |
+|---|---|
+| **Overview KPIs** | Total queries, retrieval %, general %, success rate, avg latency, errors |
+| **Route Distribution** | Pie chart of retrieval vs general query split |
+| **Query Volume Over Time** | Bar chart bucketed by minute |
+| **Model Usage** | Bar chart of queries per model |
+| **Latency Trend** | Line chart of response time across last 30 queries |
+| **Recent Queries** | Table with time, query text, route, model, retries, latency, success |
+| **Agent Pipeline** | Call counts per node |
+| **Execution Log** | Color-coded logs with keyword search and level filter (All / Error / Retry / Success / Step) |
+
+The refresh control has an **Auto-refresh** toggle, a **Pause** toggle (freeze the view without disabling refresh), and a configurable interval (3 / 5 / 10 seconds).
 
 ## Setup
 
@@ -109,7 +130,7 @@ streamlit run app.py
 | `POST` | `/chat` | Send a message |
 | `GET` | `/documents` | Get document store info |
 | `DELETE` | `/documents` | Clear all documents |
-| `GET` | `/stats` | Get pipeline metrics (used by dashboard) |
+| `GET` | `/stats` | Pipeline metrics, recent queries, and logs |
 
 ### Examples
 
@@ -123,6 +144,20 @@ curl -X POST "http://localhost:8000/chat" \
   -H "Content-Type: application/json" \
   -d '{"message": "What is this document about?", "model": "llama2"}'
 ```
+
+### Error Responses
+
+All errors return structured JSON:
+
+```json
+{ "error": "human-readable message", "detail": "raw exception detail" }
+```
+
+| Status | Meaning |
+|---|---|
+| `400` | Invalid input (e.g. non-PDF file) |
+| `503` | Ollama is unreachable |
+| `500` | Internal server error |
 
 ## Configuration
 
@@ -139,18 +174,20 @@ curl -X POST "http://localhost:8000/chat" \
 - Chunk size: 1000 characters, 200-character overlap
 - Retrieval top-k: 4 chunks
 - Default LLM: `llama2`
+- LLM call timeout: 60 seconds
+- LLM retry attempts: 3 (exponential backoff: 2s → 4s → 8s)
 
 ## Project Structure
 
 ```
 ├── backend/
-│   ├── main.py                    # FastAPI app and route definitions
-│   ├── stats.py                   # In-memory pipeline metrics tracker
+│   ├── main.py                    # FastAPI app, routes, and error handlers
+│   ├── stats.py                   # Persistent pipeline metrics (SQLite-backed)
 │   ├── services/
-│   │   ├── rag_workflow.py        # LangGraph agentic pipeline
+│   │   ├── rag_workflow.py        # LangGraph agentic pipeline + query timing
 │   │   ├── pdf_service.py         # PDF parsing and chunking
 │   │   ├── vector_service.py      # FAISS vector store wrapper
-│   │   └── ollama_service.py      # Ollama LLM and embedding client
+│   │   └── ollama_service.py      # Ollama client with retry + timeout
 │   ├── evaluation/
 │   │   ├── evaluate.py            # RAGAS evaluation runner
 │   │   └── evaluation_dataset.py  # Test dataset
@@ -158,7 +195,7 @@ curl -X POST "http://localhost:8000/chat" \
 ├── frontend/
 │   ├── app.py                     # Chat page (Streamlit)
 │   ├── pages/
-│   │   └── 1_Dashboard.py         # Live pipeline dashboard
+│   │   └── 1_Dashboard.py         # Live dashboard with charts and log viewer
 │   ├── api_client.py              # HTTP client for backend
 │   └── requirements.txt
 ├── docker-compose.yml
@@ -173,7 +210,8 @@ docker-compose up --build
 
 ## Troubleshooting
 
-- **Ollama not connecting** — ensure `ollama serve` is running on port 11434
+- **Ollama not connecting** — ensure `ollama serve` is running on port 11434; the API returns 503 with a clear message when it's down
 - **Model not found** — run `ollama pull <model-name>` before starting the backend
+- **LLM calls timing out** — default timeout is 60s; for slow hardware consider increasing `TIMEOUT` in `ollama_service.py`
 - **API connection error in UI** — ensure the backend is running on port 8000
-- **CORS issues** — backend includes CORS middleware; check `API_BASE_URL` env var
+- **Dashboard shows no charts** — send at least one message in the Chat page first to populate query data
