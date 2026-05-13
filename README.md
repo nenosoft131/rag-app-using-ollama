@@ -25,7 +25,17 @@ LangGraph Pipeline → Ollama (LLM + Embeddings) + FAISS (Vector Store) + SQLite
 - **Chat page** — PDF upload, model selector, multi-session chat with source viewing
 - **Dashboard page** — live charts, pipeline metrics, recent queries table, filtered execution logs
 
-![Screenshot](images/Screenshot.png)
+### Chat Page
+
+![Chat Page](images/app.png)
+
+### Live Dashboard
+
+![Dashboard Overview](images/Screenshot%202026-05-13%20at%2012.51.37%20PM.png)
+
+![Dashboard Charts](images/Screenshot%202026-05-13%20at%2012.51.52%20PM.png)
+
+![Dashboard Logs](images/Screenshot%202026-05-13%20at%2012.52.37%20PM.png)
 
 ## Agentic Pipeline
 

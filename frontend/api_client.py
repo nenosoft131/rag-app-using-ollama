@@ -86,3 +86,19 @@ class RAGAPIClient:
             return response.json()
         except requests.exceptions.RequestException as e:
             raise Exception(f"Failed to get stats: {str(e)}")
+
+    def get_chat_history(self, session_id: str) -> List[Dict[str, Any]]:
+        try:
+            response = self.session.get(f"{self.base_url}/chat/history/{session_id}", timeout=5)
+            response.raise_for_status()
+            return response.json().get("messages", [])
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to get chat history: {str(e)}")
+
+    def get_sessions(self) -> List[str]:
+        try:
+            response = self.session.get(f"{self.base_url}/chat/sessions", timeout=5)
+            response.raise_for_status()
+            return response.json().get("sessions", [])
+        except requests.exceptions.RequestException as e:
+            raise Exception(f"Failed to get sessions: {str(e)}")

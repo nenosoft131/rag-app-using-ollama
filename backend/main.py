@@ -14,6 +14,7 @@ from services.rag_workflow import RAGWorkflow
 from services.pdf_service import PDFService
 from services.vector_service import VectorService
 from stats import stats
+import chat_store
 
 load_dotenv()
 
@@ -104,16 +105,28 @@ def chat(request: ChatRequest):
         response = rag_workflow.process_message(
             message=request.message, session_id=request.session_id, model=request.model
         )
-        return ChatResponse(
-            response=response["response"],
-            session_id=response["session_id"],
-        )
+        sid = response["session_id"]
+        chat_store.save_message(sid, "user", request.message)
+        chat_store.save_message(sid, "assistant", response["response"])
+        return ChatResponse(response=response["response"], session_id=sid)
     except Exception as e:
         stats.inc("errors")
         msg = str(e)
         if any(k in msg.lower() for k in ("connection refused", "connect call failed", "ollama")):
             raise HTTPException(status_code=503, detail="Ollama service unavailable. Ensure Ollama is running.")
         raise HTTPException(status_code=500, detail=f"Error processing chat: {msg}")
+
+
+@app.get("/chat/history/{session_id}")
+def get_chat_history(session_id: str):
+    """Return the full message history for a session."""
+    return {"session_id": session_id, "messages": chat_store.get_history(session_id)}
+
+
+@app.get("/chat/sessions")
+def get_sessions():
+    """Return all session IDs that have history."""
+    return {"sessions": chat_store.get_all_sessions()}
 
 
 @app.get("/stats")
